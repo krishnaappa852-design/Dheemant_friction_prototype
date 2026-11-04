@@ -1,8 +1,137 @@
 <!DOCTYPE html>
-<html>
-<head><title>Friction Prototype</title></head>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Friction Prototype</title>
+<style>
+  body { font-family: Arial, sans-serif; background: #111; color: #eee; margin: 0; padding: 24px; display: flex; justify-content: center; }
+  #app { width: 100%; max-width: 420px; }
+  input, button { width: 100%; padding: 12px; margin: 8px 0; font-size: 16px; border-radius: 8px; border: none; box-sizing: border-box; }
+  button { background: #3ecf8e; color: #111; cursor: pointer; font-weight: bold; }
+  button:disabled { background: #555; color: #999; cursor: not-allowed; }
+  #exitBtn { background: #e5484d; color: #fff; }
+  #card { height: 300px; border-radius: 16px; display: flex; align-items: center; justify-content: center; font-size: 24px; text-align: center; padding: 16px; transition: background 0.5s; }
+  #meter { height: 10px; background: #333; border-radius: 5px; overflow: hidden; margin: 12px 0; }
+  #meterFill { height: 100%; width: 0%; transition: width 0.5s, background 0.5s; }
+  #overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.92); display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 24px; text-align: center; }
+  #overlay[hidden], [hidden] { display: none !important; }
+  #countdown { font-size: 64px; margin: 16px 0; }
+  #overlayBox { max-width: 380px; width: 100%; }
+</style>
+</head>
 <body>
-  <h1>Dheemant friction prototype</h1>
-  <p>Work in progress.</p>
+<div id="app">
+  <h1>Pause Before Next</h1>
+  <p id="summary"></p>
+
+  <!-- Step 1: the user sets an intention -->
+  <section id="setup">
+    <label>What did you come to watch?</label>
+    <input id="intent" placeholder="e.g. one workout video">
+    <label>How many videos do you plan to watch?</label>
+    <input id="plan" type="number" min="1" max="10" value="3">
+    <button id="startBtn">Start</button>
+  </section>
+
+  <!-- Step 2: the mock video feed -->
+  <section id="player" hidden>
+    <p id="intentLabel"></p>
+    <div id="card"></div>
+    <p id="counter"></p>
+    <div id="meter"><div id="meterFill"></div></div>
+    <button id="nextBtn">Next video</button>
+  </section>
+
+  <!-- Friction layer: appears between videos -->
+  <div id="overlay" hidden>
+    <div id="overlayBox">
+      <p id="overlayMsg"></p>
+      <div id="countdown"></div>
+      <button id="keepBtn">Keep watching</button>
+      <button id="exitBtn">Exit</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  const $ = id => document.getElementById(id);
+  const videos = ["Workout routine", "Funny cat compilation", "Study music mix", "Street food tour",
+                  "Football highlights", "Cooking hack", "Gadget review", "Travel vlog", "Dance reel", "Late night talk"];
+  let intent = "", plan = 3, count = 0, timer = null;
+
+  function showVideo() {
+    card.style.background = `hsl(${(count * 47) % 360}, 60%, 40%)`;
+    card.textContent = videos[count % videos.length];
+    $("counter").textContent = `Video ${count + 1} (planned: ${plan})`;
+    $("meterFill").style.width = Math.min(100, ((count + 1) / plan) * 100) + "%";
+    $("meterFill").style.background = count + 1 > plan ? "#e5484d" : "#3ecf8e";
+  }
+
+  // Light friction: a short pause before each video inside the plan
+  function softPause(seconds, onDone) {
+    $("overlayMsg").textContent = "Next video loading... take a breath.";
+    $("keepBtn").hidden = true;
+    $("exitBtn").hidden = true;
+    $("overlay").hidden = false;
+    let left = seconds;
+    $("countdown").textContent = left;
+    timer = setInterval(() => {
+      left--;
+      $("countdown").textContent = left;
+      if (left <= 0) { clearInterval(timer); $("overlay").hidden = true; onDone(); }
+    }, 1000);
+  }
+
+  // Hard friction: intent check; the wait grows with every extra video
+  function checkpoint() {
+    const overshoot = count + 1 - plan;
+    let left = 3 * (overshoot + 1);
+    $("overlayMsg").textContent =
+      `You came for "${intent}" and planned ${plan} videos. You have watched ${count + 1}. Is this still what you came for?`;
+    $("keepBtn").hidden = false;
+    $("exitBtn").hidden = false;
+    $("keepBtn").disabled = true;
+    $("keepBtn").textContent = "Keep watching";
+    $("countdown").textContent = left;
+    $("overlay").hidden = false;
+    timer = setInterval(() => {
+      left--;
+      $("countdown").textContent = left > 0 ? left : "";
+      if (left <= 0) { clearInterval(timer); $("keepBtn").disabled = false; }
+    }, 1000);
+  }
+
+  function goNext() {
+    if (count + 1 >= plan) {
+      checkpoint();
+    } else {
+      softPause(2, () => { count++; showVideo(); });
+    }
+  }
+
+  function exitSession() {
+    clearInterval(timer);
+    $("overlay").hidden = true;
+    $("player").hidden = true;
+    $("setup").hidden = false;
+    $("summary").textContent = `Last session: you watched ${count + 1} video(s) and planned ${plan}.`;
+  }
+
+  const card = $("card");
+  $("startBtn").onclick = () => {
+    intent = $("intent").value.trim() || "something specific";
+    plan = Math.max(1, parseInt($("plan").value) || 3);
+    count = 0;
+    $("summary").textContent = "";
+    $("intentLabel").textContent = `Intention: ${intent}`;
+    $("setup").hidden = true;
+    $("player").hidden = false;
+    showVideo();
+  };
+  $("nextBtn").onclick = goNext;
+  $("keepBtn").onclick = () => { $("overlay").hidden = true; count++; showVideo(); };
+  $("exitBtn").onclick = exitSession;
+</script>
 </body>
 </html>
